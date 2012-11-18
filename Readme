@@ -1,0 +1,62 @@
+String Index: 
+The design of the string index solution is as follows:
+
+Data Structure:
+The data structure used for storing the strings is a binary search tree. The reason for using a binary search was to search the strings in logarithmic time. The strings are ordered lexicographically. This facilitates a stric ordering among the nodes. 
+
+Prefix-Suffix Search:
+For each type of search, separate trees were formed. However, strings were not duplicated. The node strucutre ued for storing a string is as follows:
+
+struct node {
+  string str ;
+  struct node* prefixParentNode; 
+  struct node* prefixLeftChild; 
+  struct node* prefixRightChild;
+  struct node* suffixParentNode;
+  struct node* suffixLeftChild;
+  struct node* suffixRightChild;
+  int instanceCount; 
+  sem_t lock;
+};
+str: stores the string
+For each tree, pointers to left, right and parent nodes are stored. Example, for prefix tree - prefixParentNode, prefixLeftChild, prefixRightChild are stored.
+instanceCount: provides the number of instances of the string.
+lock: specifies whether the node in the string is being deleted or inserted. On deletion or insertion a lock is acquired on the node.
+
+We have two map data structures that maintain locks for each search. These maps (prefixLockMap, suffixLockMap) are <string, int> maps, where string specifies the string being searched for and int specifies the number of searches being performed on this string currently. 
+
+Each delete operation (when deleting a string s), looks for a lock in the prefix map for all the possible prefixes of string s. This is to ensure that the current string is not being searched by any other thread. Similarly, the a lookup on suffixLockMap is also performed.
+
+The queries for prefix and suffix are handled in the following manner:
+- A lock is acquired on the prefix/suffix string by entering the string in prefixLockMap/suffixLockMap. This guarantees that no mathcing string can be deleted or inserted till search completes.
+
+- The strings are searched in the binary search tree. The first step of the search is to acquire a lock (inclusive to other reader threads) in the prefixLockMap/suffixLockMap. The position of the string in the binary search tree is found in O(log N) time. All the strings in the inorder traversal of the tree that have the search string as a suffix are stored in a vector. The search is stopped at the first non-matching string. This takes O(m) comparsions, m is the number of matching strings. Thus the search time compelxity is O(m + log N).
+
+Assumptions:
+1. In our design, we have given high priority to reads. Thus, whenever a prefix search for a specific string s, takes place, we ensure that no matching string can be deleted at that time. This ensures that the number of strings searched by a prefix search is equal to the number of strings in the String Index data structure at search invocation time.
+
+Optimizations:
+1. Instead of maintaining two separate trees, a single tree is maintained. Strings within the data store are stored at a single location only.
+2. Operation level locks are not provided. Delete and insert threads wait on prefix/suffix read threads. This prevents blocking of reader threads. Once a reader threads start, no locks are granted to delete/operations on the set of nodes to be read by the reader thread. This is kept assuming that the number of read oeprations outweigh the insertions and deletions. Also, this makes the overall model fairly consistent.
+
+3. Deadlocks cannot occur because, the reader threads are given a higher priority than the delete or insertion threads. The delete and insertion operations, acquire a single lock on nodes at a given time. A deadlock can occur only when multiple resources are locked at a given time.
+
+Consistency between delete and write operations:
+The delete operation checks the instance count of each string before deleting any node. The deletion occurs in a critical section bounded by a node specific lock. Hence, at any given instance only a single delete/insert thread can act up on the node. This, makes the instance count consistent.
+
+Drawbacks:
+
+1. The delete operation implemented has a worst case complexity of O(m log N). This is because the binary search tree has to reformed on deletion of nodes. The children nodes of the deleted node, may require re-insertion.
+
+2. Extra storage required for the suffix tree. 
+
+3. Persistence in database is not yet implemented.
+
+
+The code contains a test of consistency. A set of strings instantiates the string index. Two worker threads search and remove all strings matching with a given prefix from the string index. The total strings removed matches the total matching strings in the string Index. 
+
+To run the code, make and followed by ./stridx would run the test. The total removal count displayed is x,y (x+y=3 for prefix string "f").
+
+The code is partially complete as of now.
+
+
